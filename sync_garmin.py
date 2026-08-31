@@ -1,6 +1,7 @@
 import base64
 import json
 import os
+from datetime import date
 import requests
 from garminconnect import Garmin
 
@@ -22,16 +23,24 @@ def main():
     garmin = Garmin()
     garmin.login(token_dir)
 
-    # 4. Pull training status & load metrics
-    status_data = garmin.get_training_status()
-    latest = status_data.get("latestTrainingStatusData", {})
+    # 4. Pull training status & load metrics for today
+    today_str = date.today().isoformat()
+    status_data = garmin.get_training_status(today_str)
+
+    latest = (
+        status_data.get("latestTrainingStatusData", {})
+        if isinstance(status_data, dict)
+        else {}
+    )
 
     payload = {
         "acuteLoad": latest.get("acuteLoad", 0),
         "minTrainingLoad": latest.get("minTrainingLoad", 0),
         "maxTrainingLoad": latest.get("maxTrainingLoad", 0),
         "status": latest.get("trainingStatus", "UNKNOWN"),
-        "lastUpdated": status_data.get("lastUpdated"),
+        "lastUpdated": status_data.get("lastUpdated")
+        if isinstance(status_data, dict)
+        else None,
     }
 
     # 5. Update the GitHub Gist
