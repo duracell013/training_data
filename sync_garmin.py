@@ -32,14 +32,12 @@ def main():
     vo2_max_precise = None
 
     if isinstance(status_data, dict):
-        # Extract device status data
         most_recent_status = status_data.get("mostRecentTrainingStatus", {})
         if isinstance(most_recent_status, dict):
             train_dict = most_recent_status.get("latestTrainingStatusData", {})
             if isinstance(train_dict, dict) and train_dict:
                 device_data = list(train_dict.values())[0]
 
-        # Extract precise VO2 Max value
         most_recent_vo2 = status_data.get("mostRecentVO2Max", {})
         if isinstance(most_recent_vo2, dict):
             generic_vo2 = most_recent_vo2.get("generic", {})
@@ -58,12 +56,26 @@ def main():
     )
     formatted_status = clean_phrase.capitalize()
 
-    # 6. Pull Training Readiness
+    # 6. Pull and print raw Training Readiness data
     readiness_score = None
     try:
         readiness_data = garmin.get_training_readiness(today_str)
+
+        print("=== RAW READINESS DATA START ===")
+        print(json.dumps(readiness_data, indent=2, default=str))
+        print("=== RAW READINESS DATA END ===")
+
         if isinstance(readiness_data, list) and len(readiness_data) > 0:
-            readiness_obj = readiness_data[-1]
+            sorted_data = sorted(
+                readiness_data,
+                key=lambda x: str(
+                    x.get("timestampGMT")
+                    or x.get("timestamp")
+                    or x.get("calendarDate")
+                    or ""
+                ),
+            )
+            readiness_obj = sorted_data[-1]
         elif isinstance(readiness_data, dict):
             readiness_obj = readiness_data
         else:
