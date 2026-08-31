@@ -135,8 +135,10 @@ def main():
     dsw_day = None
 
     try:
+        # Pass path without query string and supply URL parameters separately
         dsw_data = garmin.connectapi(
-            f"/workout-service/dailySuggestedWorkout?calendarDate={today_str}"
+            "workout-service/dailySuggestedWorkout",
+            params={"calendarDate": today_str},
         )
 
         if isinstance(dsw_data, list) and len(dsw_data) > 0:
@@ -171,7 +173,7 @@ def main():
 
     except Exception as e:
         print(f"Warning: Could not fetch DSW data: {e}")
-
+    
     # Build clean payload
     payload = {
         "acuteLoad": acute_dto.get("dailyTrainingLoadAcute", 0),
