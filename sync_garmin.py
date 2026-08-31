@@ -27,34 +27,66 @@ def main():
     today_str = date.today().isoformat()
     status_data = garmin.get_training_status(today_str)
 
-    # 5. Extract values from nested JSON
+    # 5. Extract status values and VO2 Max from nested JSON
     device_data = {}
+    vo2_max_precise = None
+
     if isinstance(status_data, dict):
-        most_recent = status_data.get("mostRecentTrainingStatus", {})
-        if isinstance(most_recent, dict):
-            train_dict = most_recent.get("latestTrainingStatusData", {})
+        # Extract device status data
+        most_recent_status = status_data.get("mostRecentTrainingStatus", {})
+        if isinstance(most_recent_status, dict):
+            train_dict = most_recent_status.get("latestTrainingStatusData", {})
             if isinstance(train_dict, dict) and train_dict:
                 device_data = list(train_dict.values())[0]
 
-    # Extract acuteTrainingLoadDTO dictionary
-    acute_dto = device_data.get("acuteTrainingLoadDTO", {}) if isinstance(device_data, dict) else {}
+        # Extract precise VO2 Max value
+        most_recent_vo2 = status_data.get("mostRecentVO2Max", {})
+        if isinstance(most_recent_vo2, dict):
+            generic_vo2 = most_recent_vo2.get("generic", {})
+            if isinstance(generic_vo2, dict):
+                vo2_max_precise = generic_vo2.get("vo2MaxPreciseValue")
 
-    # Extract status phrase and capitalize ("PRODUCTIVE_3" -> "Productive")
+    acute_dto = (
+        device_data.get("acuteTrainingLoadDTO", {})
+        if isinstance(device_data, dict)
+        else {}
+    )
+
     raw_phrase = device_data.get("trainingStatusFeedbackPhrase", "UNKNOWN")
-    clean_phrase = raw_phrase.split("_")[0] if isinstance(raw_phrase, str) else "UNKNOWN"
+    clean_phrase = (
+        raw_phrase.split("_")[0] if isinstance(raw_phrase, str) else "UNKNOWN"
+    )
     formatted_status = clean_phrase.capitalize()
+
+    # 6. Pull Training Readiness
+    readiness_score = None
+    try:
+        readiness_data = garmin.get_training_readiness(today_str)
+        if isinstance(readiness_data, list) and len(readiness_data) > 0:
+            readiness_obj = readiness_data[-1]
+        elif isinstance(readiness_data, dict):
+            readiness_obj = readiness_data
+        else:
+            readiness_obj = {}
+
+        readiness_score = readiness_obj.get("score")
+    except Exception as e:
+        print(f"Warning: Could not fetch training readiness: {e}")
 
     # Build clean payload
     payload = {
         "acuteLoad": acute_dto.get("dailyTrainingLoadAcute", 0),
         "minTrainingLoad": acute_dto.get("minTrainingLoadChronic", 0),
         "maxTrainingLoad": acute_dto.get("maxTrainingLoadChronic", 0),
-        "status": formatted_status
+        "status": formatted_status,
+        "trainingReadiness": readiness_score,
+        "vo2Max": vo2_max_precise,
+        "lastUpdated": device_data.get("calendarDate", today_str),
     }
 
     print(f"Extracted payload: {payload}")
 
-    # 6. Update the GitHub Gist
+    # 7. Update the GitHub Gist
     gist_id = os.environ["GIST_ID"]
     gh_pat = os.environ["GH_PAT"]
 
@@ -65,9 +97,7 @@ def main():
 
     body = {
         "files": {
-            "garmin_data.json": {
-                "content": json.dumps(payload, indent=2)
-            }
+            "garmin_data.json": {"content": json.dumps(payload, indent=2)}
         }
     }
 
