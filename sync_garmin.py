@@ -134,29 +134,43 @@ def main():
     dsw_duration_min = None
     dsw_day = None
 
-    try:
-        # Pass path without query string and supply URL parameters separately
-        dsw_data = garmin.connectapi(
-            "workout-service/dailySuggestedWorkout",
-            params={"calendarDate": today_str},
-        )
+    # Known Garmin endpoints for suggested/scheduled workouts
+    endpoints_to_try = [
+        ("workout-service/dailySuggestedWorkouts", {"calendarDate": today_str}),
+        ("workout-service/dailySuggestedWorkout", {"calendarDate": today_str}),
+        (
+            f"scheduled-workout-service/scheduledWorkout/date/{today_str}",
+            {},
+        ),
+    ]
 
-        if isinstance(dsw_data, list) and len(dsw_data) > 0:
-            dsw_obj = dsw_data[0]
-        elif isinstance(dsw_data, dict):
-            dsw_obj = dsw_data
-        else:
-            dsw_obj = {}
+    dsw_obj = {}
 
+    for path, params in endpoints_to_try:
+        try:
+            res = garmin.connectapi(path, params=params)
+            if res:
+                if isinstance(res, list) and len(res) > 0:
+                    dsw_obj = res[0]
+                elif isinstance(res, dict):
+                    dsw_obj = res
+                break
+        except Exception:
+            continue
+
+    if dsw_obj:
         raw_dsw_type = (
             dsw_obj.get("workoutName")
             or dsw_obj.get("workoutType")
             or dsw_obj.get("executableStepType")
+            or dsw_obj.get("title")
         )
         dsw_type = format_text(raw_dsw_type)
 
-        duration_sec = dsw_obj.get("estimatedDurationInSec") or dsw_obj.get(
-            "duration"
+        duration_sec = (
+            dsw_obj.get("estimatedDurationInSec")
+            or dsw_obj.get("duration")
+            or dsw_obj.get("durationInSeconds")
         )
         if duration_sec:
             dsw_duration_min = round(duration_sec / 60)
@@ -170,9 +184,6 @@ def main():
                 dsw_day = "Tomorrow"
             else:
                 dsw_day = w_date.strftime("%A")
-
-    except Exception as e:
-        print(f"Warning: Could not fetch DSW data: {e}")
     
     # Build clean payload
     payload = {
