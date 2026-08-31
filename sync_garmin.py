@@ -129,36 +129,6 @@ def main():
 
     running_km = round(running_meters / 1000.0, 1)
     
-    # 8. Pull Daily Suggested Workout (DSW) & Scheduled Day
-    dsw_type = None
-    dsw_duration_min = None
-    dsw_day = None
-    
-   # Diagnostic DSW Fetch
-    print("--- TESTING DSW ENDPOINTS ---")
-    endpoints = [
-        ("workout-service/dailySuggestedWorkouts", {"calendarDate": today_str}),
-        (
-            "workout-service/dailySuggestedWorkout",
-            {"calendarDate": today_str},
-        ),
-        (
-            f"scheduled-workout-service/scheduledWorkout/date/{today_str}",
-            {},
-        ),
-        (
-            f"calendar-service/year/{today.year}/month/{today.month}",
-            {},
-        ),  # Calendar workouts
-    ]
-
-    for path, params in endpoints:
-        try:
-            res = garmin.connectapi(path, params=params)
-            print(f"Path: {path} | Response: {json.dumps(res)}")
-        except Exception as e:
-            print(f"Path: {path} | Error: {e}")
-    
     # Build clean payload
     payload = {
         "acuteLoad": acute_dto.get("dailyTrainingLoadAcute", 0),
@@ -172,9 +142,6 @@ def main():
         "recoveryTimeFactorPercent": recovery_time_factor_percent,
         "vo2Max": vo2_max_precise,
         "weeklyRunningKm": running_km,
-        "dswType": dsw_type,
-        "dswDurationMin": dsw_duration_min,
-        "dswDay": dsw_day,
         "lastUpdated": device_data.get("calendarDate", today_str),
     }
 
