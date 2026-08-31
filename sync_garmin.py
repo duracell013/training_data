@@ -129,6 +129,49 @@ def main():
 
     running_km = round(running_meters / 1000.0, 1)
 
+    # 8. Pull Daily Suggested Workout (DSW) & Scheduled Day
+    dsw_type = None
+    dsw_duration_min = None
+    dsw_day = None
+
+    try:
+        dsw_data = garmin.connectapi(
+            f"/workout-service/dailySuggestedWorkout?calendarDate={today_str}"
+        )
+
+        if isinstance(dsw_data, list) and len(dsw_data) > 0:
+            dsw_obj = dsw_data[0]
+        elif isinstance(dsw_data, dict):
+            dsw_obj = dsw_data
+        else:
+            dsw_obj = {}
+
+        raw_dsw_type = (
+            dsw_obj.get("workoutName")
+            or dsw_obj.get("workoutType")
+            or dsw_obj.get("executableStepType")
+        )
+        dsw_type = format_text(raw_dsw_type)
+
+        duration_sec = dsw_obj.get("estimatedDurationInSec") or dsw_obj.get(
+            "duration"
+        )
+        if duration_sec:
+            dsw_duration_min = round(duration_sec / 60)
+
+        workout_date_str = dsw_obj.get("calendarDate") or dsw_obj.get("date")
+        if workout_date_str:
+            w_date = date.fromisoformat(workout_date_str)
+            if w_date == today:
+                dsw_day = "Today"
+            elif w_date == today + timedelta(days=1):
+                dsw_day = "Tomorrow"
+            else:
+                dsw_day = w_date.strftime("%A")
+
+    except Exception as e:
+        print(f"Warning: Could not fetch DSW data: {e}")
+
     # Build clean payload
     payload = {
         "acuteLoad": acute_dto.get("dailyTrainingLoadAcute", 0),
@@ -142,12 +185,15 @@ def main():
         "recoveryTimeFactorPercent": recovery_time_factor_percent,
         "vo2Max": vo2_max_precise,
         "weeklyRunningKm": running_km,
+        "dswType": dsw_type,
+        "dswDurationMin": dsw_duration_min,
+        "dswDay": dsw_day,
         "lastUpdated": device_data.get("calendarDate", today_str),
     }
 
     print(f"Extracted payload: {payload}")
 
-    # 8. Update the GitHub Gist
+    # 9. Update the GitHub Gist
     gist_id = os.environ["GIST_ID"]
     gh_pat = os.environ["GH_PAT"]
 
