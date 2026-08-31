@@ -1,9 +1,26 @@
 import base64
 import json
 import os
-from datetime import date
+from datetime import date, timedelta
 import requests
 from garminconnect import Garmin
+
+
+def format_text(val):
+    """Converts raw Garmin strings (e.g. 'RESTED_AND_READY' or 'PRODUCTIVE_3')
+
+    into clean sentence case ('Rested and ready', 'Productive').
+    """
+    if not val or not isinstance(val, str):
+        return None
+
+    words = val.split("_")
+    # Drop trailing numeric identifiers if present (e.g. "PRODUCTIVE_3" -> ["PRODUCTIVE"])
+    if len(words) > 1 and words[-1].isdigit():
+        words = words[:-1]
+
+    cleaned = " ".join(words).lower()
+    return cleaned.capitalize()
 
 
 def main():
@@ -24,7 +41,8 @@ def main():
     garmin.login(token_dir)
 
     # 4. Pull training status & load metrics for today
-    today_str = date.today().isoformat()
+    today = date.today()
+    today_str = today.isoformat()
     status_data = garmin.get_training_status(today_str)
 
     # 5. Extract status values and VO2 Max from nested JSON
@@ -50,11 +68,10 @@ def main():
         else {}
     )
 
-    raw_phrase = device_data.get("trainingStatusFeedbackPhrase", "UNKNOWN")
-    clean_phrase = (
-        raw_phrase.split("_")[0] if isinstance(raw_phrase, str) else "UNKNOWN"
+    formatted_status = (
+        format_text(device_data.get("trainingStatusFeedbackPhrase"))
+        or "Unknown"
     )
-    formatted_status = clean_phrase.capitalize()
 
     # 6. Pull Training Readiness and recovery metrics
     readiness_score = None
@@ -83,13 +100,11 @@ def main():
             readiness_obj = {}
 
         readiness_score = readiness_obj.get("score")
-        level = readiness_obj.get("level")
-        recovery_time_factor_percent = readiness_obj.get("recoveryTimeFactorPercent")
-
-        # Format feedbackShort ("RESTED_AND_READY" -> "Rested and ready")
-        raw_feedback = readiness_obj.get("feedbackShort")
-        if raw_feedback and isinstance(raw_feedback, str):
-            feedback_short = raw_feedback.replace("_", " ").lower().capitalize()
+        level = format_text(readiness_obj.get("level"))
+        feedback_short = format_text(readiness_obj.get("feedbackShort"))
+        recovery_time_factor_percent = readiness_obj.get(
+            "recoveryTimeFactorPercent"
+        )
 
         # Convert recoveryTime from minutes to rounded hours
         raw_rec_time = readiness_obj.get("recoveryTime")
@@ -98,6 +113,21 @@ def main():
 
     except Exception as e:
         print(f"Warning: Could not fetch training readiness: {e}")
+
+    # 7. Calculate total running distance (km) over the last 7 days
+    start_7d = (today - timedelta(days=6)).isoformat()
+    running_meters = 0.0
+
+    try:
+        activities = garmin.get_activities_by_date(start_7d, today_str)
+        for act in activities:
+            type_key = act.get("activityType", {}).get("typeKey", "")
+            if "running" in type_key:
+                running_meters += act.get("distance", 0.0)
+    except Exception as e:
+        print(f"Warning: Could not fetch activities: {e}")
+
+    running_km = round(running_meters / 1000.0, 1)
 
     # Build clean payload
     payload = {
@@ -111,12 +141,13 @@ def main():
         "recoveryTime": recovery_time_hours,
         "recoveryTimeFactorPercent": recovery_time_factor_percent,
         "vo2Max": vo2_max_precise,
+        "weeklyRunningKm": running_km,
         "lastUpdated": device_data.get("calendarDate", today_str),
     }
 
     print(f"Extracted payload: {payload}")
 
-    # 7. Update the GitHub Gist
+    # 8. Update the GitHub Gist
     gist_id = os.environ["GIST_ID"]
     gh_pat = os.environ["GH_PAT"]
 
