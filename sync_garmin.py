@@ -8,9 +8,9 @@ def main():
     # 1. Fetch token string from GitHub Secret
     token_b64 = os.environ["GARMIN_TOKENS_BASE64"]
 
-    # 2. Authenticate directly using the Base64 string
+    # 2. Authenticate using garth.loads()
     garmin = Garmin()
-    garmin.login(token_b64)
+    garmin.garth.loads(token_b64)
 
     # 3. Pull training status & load metrics
     status_data = garmin.get_training_status()
