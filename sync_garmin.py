@@ -56,14 +56,15 @@ def main():
     )
     formatted_status = clean_phrase.capitalize()
 
-    # 6. Pull and print raw Training Readiness data
+    # 6. Pull Training Readiness and recovery metrics
     readiness_score = None
+    feedback_short = None
+    level = None
+    recovery_time_hours = None
+    recovery_time_factor_percent = None
+
     try:
         readiness_data = garmin.get_training_readiness(today_str)
-
-        print("=== RAW READINESS DATA START ===")
-        print(json.dumps(readiness_data, indent=2, default=str))
-        print("=== RAW READINESS DATA END ===")
 
         if isinstance(readiness_data, list) and len(readiness_data) > 0:
             sorted_data = sorted(
@@ -82,6 +83,19 @@ def main():
             readiness_obj = {}
 
         readiness_score = readiness_obj.get("score")
+        level = readiness_obj.get("level")
+        recovery_time_factor_percent = readiness_obj.get("recoveryTimeFactorPercent")
+
+        # Format feedbackShort ("RESTED_AND_READY" -> "Rested and ready")
+        raw_feedback = readiness_obj.get("feedbackShort")
+        if raw_feedback and isinstance(raw_feedback, str):
+            feedback_short = raw_feedback.replace("_", " ").lower().capitalize()
+
+        # Convert recoveryTime from minutes to rounded hours
+        raw_rec_time = readiness_obj.get("recoveryTime")
+        if raw_rec_time is not None:
+            recovery_time_hours = round(raw_rec_time / 60)
+
     except Exception as e:
         print(f"Warning: Could not fetch training readiness: {e}")
 
@@ -92,6 +106,10 @@ def main():
         "maxTrainingLoad": acute_dto.get("maxTrainingLoadChronic", 0),
         "status": formatted_status,
         "trainingReadiness": readiness_score,
+        "feedbackShort": feedback_short,
+        "level": level,
+        "recoveryTime": recovery_time_hours,
+        "recoveryTimeFactorPercent": recovery_time_factor_percent,
         "vo2Max": vo2_max_precise,
         "lastUpdated": device_data.get("calendarDate", today_str),
     }
