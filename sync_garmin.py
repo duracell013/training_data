@@ -27,40 +27,34 @@ def main():
     today_str = date.today().isoformat()
     status_data = garmin.get_training_status(today_str)
 
-    # Pretty-print the raw status_data dictionary to inspect its structure
-    print("=== RAW STATUS DATA START ===")
-    print(json.dumps(status_data, indent=2, default=str))
-    print("=== RAW STATUS DATA END ===")
-
-    latest = {}
+    # 5. Extract values from nested JSON
+    device_data = {}
     if isinstance(status_data, dict):
         most_recent = status_data.get("mostRecentTrainingStatus", {})
         if isinstance(most_recent, dict):
             train_dict = most_recent.get("latestTrainingStatusData", {})
             if isinstance(train_dict, dict) and train_dict:
-                latest = list(train_dict.values())[0]
+                device_data = list(train_dict.values())[0]
 
-        if not latest and "latestTrainingStatusData" in status_data:
-            train_dict = status_data.get("latestTrainingStatusData", {})
-            if isinstance(train_dict, dict) and train_dict:
-                latest = list(train_dict.values())[0]
+    # Extract acuteTrainingLoadDTO dictionary
+    acute_dto = device_data.get("acuteTrainingLoadDTO", {}) if isinstance(device_data, dict) else {}
 
+    # Extract status phrase and capitalize ("PRODUCTIVE_3" -> "Productive")
+    raw_phrase = device_data.get("trainingStatusFeedbackPhrase", "UNKNOWN")
+    clean_phrase = raw_phrase.split("_")[0] if isinstance(raw_phrase, str) else "UNKNOWN"
+    formatted_status = clean_phrase.capitalize()
+
+    # Build clean payload
     payload = {
-        "acuteLoad": latest.get("acuteLoad", 0),
-        "minTrainingLoad": latest.get("minTrainingLoad", 0),
-        "maxTrainingLoad": latest.get("maxTrainingLoad", 0),
-        "status": latest.get("trainingStatus", "UNKNOWN"),
-        "lastUpdated": latest.get("calendarDate")
-        or (
-            status_data.get("lastUpdated")
-            if isinstance(status_data, dict)
-            else None
-        ),
+        "acuteLoad": acute_dto.get("dailyTrainingLoadAcute", 0),
+        "minTrainingLoad": acute_dto.get("minTrainingLoadChronic", 0),
+        "maxTrainingLoad": acute_dto.get("maxTrainingLoadChronic", 0),
+        "status": formatted_status
     }
 
-    print(f"Parsed payload: {payload}")
+    print(f"Extracted payload: {payload}")
 
-    # 5. Update the GitHub Gist
+    # 6. Update the GitHub Gist
     gist_id = os.environ["GIST_ID"]
     gh_pat = os.environ["GH_PAT"]
 
@@ -71,7 +65,9 @@ def main():
 
     body = {
         "files": {
-            "garmin_data.json": {"content": json.dumps(payload, indent=2)}
+            "garmin_data.json": {
+                "content": json.dumps(payload, indent=2)
+            }
         }
     }
 
