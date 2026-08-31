@@ -1,0 +1,30 @@
+name: Garmin Sync Workflow
+
+on:
+  schedule:
+    - cron: '0 */4 * * *' # Executes every 4 hours
+  workflow_dispatch: # Allows manual triggers from GitHub web UI
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install garminconnect requests
+
+      - name: Run Garmin Sync
+        env:
+          GARMIN_TOKENS_BASE64: ${{ secrets.GARMIN_TOKENS_BASE64 }}
+          GH_PAT: ${{ secrets.GH_PAT }}
+          GIST_ID: ${{ secrets.GIST_ID }}
+        run: python sync_garmin.py
