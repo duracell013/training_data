@@ -27,21 +27,38 @@ def main():
     today_str = date.today().isoformat()
     status_data = garmin.get_training_status(today_str)
 
-    latest = (
-        status_data.get("latestTrainingStatusData", {})
-        if isinstance(status_data, dict)
-        else {}
-    )
+    # Pretty-print the raw status_data dictionary to inspect its structure
+    print("=== RAW STATUS DATA START ===")
+    print(json.dumps(status_data, indent=2, default=str))
+    print("=== RAW STATUS DATA END ===")
+
+    latest = {}
+    if isinstance(status_data, dict):
+        most_recent = status_data.get("mostRecentTrainingStatus", {})
+        if isinstance(most_recent, dict):
+            train_dict = most_recent.get("latestTrainingStatusData", {})
+            if isinstance(train_dict, dict) and train_dict:
+                latest = list(train_dict.values())[0]
+
+        if not latest and "latestTrainingStatusData" in status_data:
+            train_dict = status_data.get("latestTrainingStatusData", {})
+            if isinstance(train_dict, dict) and train_dict:
+                latest = list(train_dict.values())[0]
 
     payload = {
         "acuteLoad": latest.get("acuteLoad", 0),
         "minTrainingLoad": latest.get("minTrainingLoad", 0),
         "maxTrainingLoad": latest.get("maxTrainingLoad", 0),
         "status": latest.get("trainingStatus", "UNKNOWN"),
-        "lastUpdated": status_data.get("lastUpdated")
-        if isinstance(status_data, dict)
-        else None,
+        "lastUpdated": latest.get("calendarDate")
+        or (
+            status_data.get("lastUpdated")
+            if isinstance(status_data, dict)
+            else None
+        ),
     }
+
+    print(f"Parsed payload: {payload}")
 
     # 5. Update the GitHub Gist
     gist_id = os.environ["GIST_ID"]
@@ -54,9 +71,7 @@ def main():
 
     body = {
         "files": {
-            "garmin_data.json": {
-                "content": json.dumps(payload, indent=2)
-            }
+            "garmin_data.json": {"content": json.dumps(payload, indent=2)}
         }
     }
 
