@@ -128,62 +128,36 @@ def main():
         print(f"Warning: Could not fetch activities: {e}")
 
     running_km = round(running_meters / 1000.0, 1)
-
+    
     # 8. Pull Daily Suggested Workout (DSW) & Scheduled Day
     dsw_type = None
     dsw_duration_min = None
     dsw_day = None
-
-    # Known Garmin endpoints for suggested/scheduled workouts
-    endpoints_to_try = [
+    
+   # Diagnostic DSW Fetch
+    print("--- TESTING DSW ENDPOINTS ---")
+    endpoints = [
         ("workout-service/dailySuggestedWorkouts", {"calendarDate": today_str}),
-        ("workout-service/dailySuggestedWorkout", {"calendarDate": today_str}),
+        (
+            "workout-service/dailySuggestedWorkout",
+            {"calendarDate": today_str},
+        ),
         (
             f"scheduled-workout-service/scheduledWorkout/date/{today_str}",
             {},
         ),
+        (
+            f"calendar-service/year/{today.year}/month/{today.month}",
+            {},
+        ),  # Calendar workouts
     ]
 
-    dsw_obj = {}
-
-    for path, params in endpoints_to_try:
+    for path, params in endpoints:
         try:
             res = garmin.connectapi(path, params=params)
-            if res:
-                if isinstance(res, list) and len(res) > 0:
-                    dsw_obj = res[0]
-                elif isinstance(res, dict):
-                    dsw_obj = res
-                break
-        except Exception:
-            continue
-
-    if dsw_obj:
-        raw_dsw_type = (
-            dsw_obj.get("workoutName")
-            or dsw_obj.get("workoutType")
-            or dsw_obj.get("executableStepType")
-            or dsw_obj.get("title")
-        )
-        dsw_type = format_text(raw_dsw_type)
-
-        duration_sec = (
-            dsw_obj.get("estimatedDurationInSec")
-            or dsw_obj.get("duration")
-            or dsw_obj.get("durationInSeconds")
-        )
-        if duration_sec:
-            dsw_duration_min = round(duration_sec / 60)
-
-        workout_date_str = dsw_obj.get("calendarDate") or dsw_obj.get("date")
-        if workout_date_str:
-            w_date = date.fromisoformat(workout_date_str)
-            if w_date == today:
-                dsw_day = "Today"
-            elif w_date == today + timedelta(days=1):
-                dsw_day = "Tomorrow"
-            else:
-                dsw_day = w_date.strftime("%A")
+            print(f"Path: {path} | Response: {json.dumps(res)[:300]}")
+        except Exception as e:
+            print(f"Path: {path} | Error: {e}")
     
     # Build clean payload
     payload = {
