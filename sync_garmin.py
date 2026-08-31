@@ -155,7 +155,7 @@ def main():
     for path, params in endpoints:
         try:
             res = garmin.connectapi(path, params=params)
-            print(f"Path: {path} | Response: {json.dumps(res)[:300]}")
+            print(f"Path: {path} | Response: {json.dumps(res)}")
         except Exception as e:
             print(f"Path: {path} | Error: {e}")
     
