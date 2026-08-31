@@ -1,3 +1,4 @@
+import base64
 import json
 import os
 import requests
@@ -5,14 +6,23 @@ from garminconnect import Garmin
 
 
 def main():
-    # 1. Fetch token string from GitHub Secret
+    # 1. Fetch and decode token string from GitHub Secret
     token_b64 = os.environ["GARMIN_TOKENS_BASE64"]
+    token_json = base64.b64decode(token_b64).decode("utf-8")
 
-    # 2. Authenticate using garth.loads()
+    # 2. Reconstruct ~/.garminconnect/garmin_tokens.json
+    token_dir = os.path.expanduser("~/.garminconnect")
+    os.makedirs(token_dir, exist_ok=True)
+    token_file = os.path.join(token_dir, "garmin_tokens.json")
+
+    with open(token_file, "w", encoding="utf-8") as f:
+        f.write(token_json)
+
+    # 3. Authenticate using the token store path
     garmin = Garmin()
-    garmin.garth.loads(token_b64)
+    garmin.login(token_dir)
 
-    # 3. Pull training status & load metrics
+    # 4. Pull training status & load metrics
     status_data = garmin.get_training_status()
     latest = status_data.get("latestTrainingStatusData", {})
 
@@ -24,7 +34,7 @@ def main():
         "lastUpdated": status_data.get("lastUpdated"),
     }
 
-    # 4. Update the GitHub Gist
+    # 5. Update the GitHub Gist
     gist_id = os.environ["GIST_ID"]
     gh_pat = os.environ["GH_PAT"]
 
