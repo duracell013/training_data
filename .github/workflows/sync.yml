@@ -9,8 +9,8 @@ jobs:
   sync:
     runs-on: ubuntu-slim
     steps:
-#      - name: Checkout Repo
-#        uses: actions/checkout@v4
+      - name: Checkout Repo
+        uses: actions/checkout@v5
 
 #      - name: Setup Python
 #        uses: actions/setup-python@v5
