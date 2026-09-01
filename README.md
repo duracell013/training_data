@@ -16,6 +16,20 @@ Automated serverless pipeline to sync advanced Garmin metrics—including **Acut
   * **Precise VO2 Max**
   * **7-Day Cumulative Running Distance** (in km)
 * **Auto-Scaling KWGT Bar:** Included widget dynamic scaling logic adjusting to any screen width (`$si(rwidth)$`).
+---
+
+## 📱 Screenshots
+
+<table>
+ <tr>
+  <td>KWGT widget</td>
+  <td><img src="/Screenshot_Widget.jpg?raw=true" width="40%" /></td>
+ </tr>
+ <tr>
+  <td>Widget on home screen (Nova Launcher)</td>
+  <td><img src="/Screenshot_Launcher.png?raw=true" width="40%" /></td>
+ </tr>
+</table>
 
 ---
 
