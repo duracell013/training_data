@@ -2,7 +2,7 @@ name: Garmin Sync Workflow
 
 on:
   schedule:
-    - cron: '0 */1 * * *' # Executes every 1 hour
+    - cron: '27 */1 * * *' # Executes every 1 hour
   workflow_dispatch: # Allows manual triggers from GitHub web UI
 
 jobs:
