@@ -15,12 +15,29 @@ def format_text(val):
         return None
 
     words = val.split("_")
-    # Drop trailing numeric identifiers if present (e.g. "PRODUCTIVE_3" -> ["PRODUCTIVE"])
     if len(words) > 1 and words[-1].isdigit():
         words = words[:-1]
 
     cleaned = " ".join(words).lower()
     return cleaned.capitalize()
+
+
+def extract_readiness_object(readiness_data):
+    """Extracts the most recent readiness entry from list or dict response."""
+    if isinstance(readiness_data, list) and len(readiness_data) > 0:
+        sorted_data = sorted(
+            readiness_data,
+            key=lambda x: str(
+                x.get("timestampGMT")
+                or x.get("timestamp")
+                or x.get("calendarDate")
+                or ""
+            ),
+        )
+        return sorted_data[-1]
+    elif isinstance(readiness_data, dict):
+        return readiness_data
+    return {}
 
 
 def main():
@@ -40,14 +57,14 @@ def main():
     garmin = Garmin()
     garmin.login(token_dir)
 
-    # 4. Pull training status & load metrics (with yesterday fallback for early morning runs)
+    # 4. Determine target date (fallback to yesterday if empty for today)
     today = date.today()
     today_str = today.isoformat()
     yesterday_str = (today - timedelta(days=1)).isoformat()
 
+    target_date_str = today_str
     status_data = garmin.get_training_status(today_str)
-    
-    # Check if today's payload has data; if empty, fallback to yesterday
+
     device_data = {}
     if isinstance(status_data, dict):
         most_recent_status = status_data.get("mostRecentTrainingStatus", {})
@@ -56,10 +73,11 @@ def main():
             if isinstance(train_dict, dict) and train_dict:
                 device_data = list(train_dict.values())[0]
 
-    # Fallback to yesterday if watch hasn't synced today yet
+    # Switch target date to yesterday across all requests if today's watch sync hasn't occurred
     if not device_data:
-        print("Today's status empty (pre-sync). Fetching yesterday's status...")
-        status_data = garmin.get_training_status(yesterday_str)
+        print("Today's status empty (pre-sync). Switching target date to yesterday...")
+        target_date_str = yesterday_str
+        status_data = garmin.get_training_status(target_date_str)
         if isinstance(status_data, dict):
             most_recent_status = status_data.get("mostRecentTrainingStatus", {})
             if isinstance(most_recent_status, dict):
@@ -81,13 +99,13 @@ def main():
         if isinstance(device_data, dict)
         else {}
     )
-                                                        
+
     formatted_status = (
         format_text(device_data.get("trainingStatusFeedbackPhrase"))
         or "Unknown"
     )
 
-    # 6. Pull Training Readiness and recovery metrics
+    # 5. Pull Training Readiness using target_date_str
     readiness_score = None
     feedback_short = None
     level = None
@@ -95,23 +113,8 @@ def main():
     recovery_time_factor_percent = None
 
     try:
-        readiness_data = garmin.get_training_readiness(today_str)
-
-        if isinstance(readiness_data, list) and len(readiness_data) > 0:
-            sorted_data = sorted(
-                readiness_data,
-                key=lambda x: str(
-                    x.get("timestampGMT")
-                    or x.get("timestamp")
-                    or x.get("calendarDate")
-                    or ""
-                ),
-            )
-            readiness_obj = sorted_data[-1]
-        elif isinstance(readiness_data, dict):
-            readiness_obj = readiness_data
-        else:
-            readiness_obj = {}
+        readiness_data = garmin.get_training_readiness(target_date_str)
+        readiness_obj = extract_readiness_object(readiness_data)
 
         readiness_score = readiness_obj.get("score")
         level = format_text(readiness_obj.get("level"))
@@ -120,15 +123,14 @@ def main():
             "recoveryTimeFactorPercent"
         )
 
-        # Convert recoveryTime from minutes to rounded hours
         raw_rec_time = readiness_obj.get("recoveryTime")
         if raw_rec_time is not None:
             recovery_time_hours = round(raw_rec_time / 60)
 
     except Exception as e:
-        print(f"Warning: Could not fetch training readiness: {e}")
+        print(f"Warning: Could not fetch training readiness for {target_date_str}: {e}")
 
-    # 7. Calculate total running distance (km) over the last 7 days
+    # 6. Calculate total running distance (km) over the last 7 days
     start_7d = (today - timedelta(days=6)).isoformat()
     running_meters = 0.0
 
@@ -142,8 +144,8 @@ def main():
         print(f"Warning: Could not fetch activities: {e}")
 
     running_km = round(running_meters / 1000.0, 1)
-    
-    # Build clean payload
+
+    # Build clean payload using resolved target_date_str
     payload = {
         "acuteLoad": acute_dto.get("dailyTrainingLoadAcute", 0),
         "minTrainingLoad": acute_dto.get("minTrainingLoadChronic", 0),
@@ -156,12 +158,12 @@ def main():
         "recoveryTimeFactorPercent": recovery_time_factor_percent,
         "vo2Max": vo2_max_precise,
         "weeklyRunningKm": running_km,
-        "lastUpdated": device_data.get("calendarDate", today_str),
+        "lastUpdated": device_data.get("calendarDate", target_date_str),
     }
 
-    print(f"Extracted payload: {payload}")
+    print(f"Extracted payload for date {target_date_str}: {payload}")
 
-    # 9. Update the GitHub Gist
+    # 7. Update the GitHub Gist
     gist_id = os.environ["GIST_ID"]
     gh_pat = os.environ["GH_PAT"]
 
