@@ -40,15 +40,15 @@ def main():
     garmin = Garmin()
     garmin.login(token_dir)
 
-    # 4. Pull training status & load metrics for today
+    # 4. Pull training status & load metrics (with yesterday fallback for early morning runs)
     today = date.today()
     today_str = today.isoformat()
+    yesterday_str = (today - timedelta(days=1)).isoformat()
+
     status_data = garmin.get_training_status(today_str)
-
-    # 5. Extract status values and VO2 Max from nested JSON
+    
+    # Check if today's payload has data; if empty, fallback to yesterday
     device_data = {}
-    vo2_max_precise = None
-
     if isinstance(status_data, dict):
         most_recent_status = status_data.get("mostRecentTrainingStatus", {})
         if isinstance(most_recent_status, dict):
@@ -56,6 +56,20 @@ def main():
             if isinstance(train_dict, dict) and train_dict:
                 device_data = list(train_dict.values())[0]
 
+    # Fallback to yesterday if watch hasn't synced today yet
+    if not device_data:
+        print("Today's status empty (pre-sync). Fetching yesterday's status...")
+        status_data = garmin.get_training_status(yesterday_str)
+        if isinstance(status_data, dict):
+            most_recent_status = status_data.get("mostRecentTrainingStatus", {})
+            if isinstance(most_recent_status, dict):
+                train_dict = most_recent_status.get("latestTrainingStatusData", {})
+                if isinstance(train_dict, dict) and train_dict:
+                    device_data = list(train_dict.values())[0]
+
+    # Extract VO2 Max
+    vo2_max_precise = None
+    if isinstance(status_data, dict):
         most_recent_vo2 = status_data.get("mostRecentVO2Max", {})
         if isinstance(most_recent_vo2, dict):
             generic_vo2 = most_recent_vo2.get("generic", {})
@@ -67,7 +81,7 @@ def main():
         if isinstance(device_data, dict)
         else {}
     )
-
+                                                        
     formatted_status = (
         format_text(device_data.get("trainingStatusFeedbackPhrase"))
         or "Unknown"
