@@ -175,7 +175,7 @@ def main():
         "minTrainingLoad": acute_dto.get("minTrainingLoadChronic", 0),
         "maxTrainingLoad": acute_dto.get("maxTrainingLoadChronic", 0),
         "status": formatted_status,
-        "trainingReadiness": readiness_score,
+        "readinessScore": readiness_score,
         "readinessFeedback": readiness_feedback,
         "readinessLevel": readiness_level,
         "recoveryTime": recovery_time_hours,
