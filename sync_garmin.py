@@ -106,8 +106,8 @@ def main():
 
     # 5. Pull Training Readiness using target_date_str
     readiness_score = None
-    feedback_short = None
-    level = None
+    readiness_feedback = None
+    readiness_level = None
     recovery_time_hours = None
     recovery_time_factor_percent = None
 
@@ -116,8 +116,8 @@ def main():
         readiness_obj = extract_readiness_object(readiness_data)
 
         readiness_score = readiness_obj.get("score")
-        level = format_text(readiness_obj.get("level"))
-        feedback_short = format_text(readiness_obj.get("feedbackShort"))
+        readiness_level = format_text(readiness_obj.get("level"))
+        readiness_feedback = format_text(readiness_obj.get("feedbackShort"))
         recovery_time_factor_percent = readiness_obj.get(
             "recoveryTimeFactorPercent"
         )
@@ -176,8 +176,8 @@ def main():
         "maxTrainingLoad": acute_dto.get("maxTrainingLoadChronic", 0),
         "status": formatted_status,
         "trainingReadiness": readiness_score,
-        "feedbackShort": feedback_short,
-        "level": level,
+        "readinessFeedback": readiness_feedback,
+        "readinessLevel": readiness_level,
         "recoveryTime": recovery_time_hours,
         "recoveryTimeFactorPercent": recovery_time_factor_percent,
         "vo2Max": vo2_max_precise,
