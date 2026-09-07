@@ -157,6 +157,20 @@ def main():
     running_km = round(running_meters / 1000.0, 1)
     weekly_activity_hours = round(total_duration_sec / 3600.0, 1)
 
+
+    # --- DEBUG INTENSITY MINUTES ---
+    print("--- DEBUG USER SUMMARY ---")
+    try:
+        summary = garmin.get_user_summary(today_str)
+        intensity_keys = {
+            k: v
+            for k, v in summary.items()
+            if "intensity" in k.lower() or "minute" in k.lower()
+        }
+        print(f"Relevant keys in get_user_summary: {json.dumps(intensity_keys, indent=2)}")
+    except Exception as e:
+        print(f"Error fetching user summary debug: {e}")
+    
     # 7. Calculate Intensity Minutes for current week starting Monday
     monday_date = today - timedelta(days=today.weekday())
     monday_str = monday_date.isoformat()
