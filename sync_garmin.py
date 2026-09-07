@@ -8,7 +8,6 @@ from garminconnect import Garmin
 
 def format_text(val):
     """Converts raw Garmin strings (e.g. 'RESTED_AND_READY' or 'PRODUCTIVE_3')
-
     into clean sentence case ('Rested and ready', 'Productive').
     """
     if not val or not isinstance(val, str):
@@ -75,18 +74,13 @@ def main():
 
     # Switch target date to yesterday across all requests if today's watch sync hasn't occurred
     if not device_data:
-        print(
-            "Today's status empty (pre-sync). Switching target date to"
-            " yesterday..."
-        )
+        print("Today's status empty (pre-sync). Switching target date to yesterday...")
         target_date_str = yesterday_str
         status_data = garmin.get_training_status(target_date_str)
         if isinstance(status_data, dict):
             most_recent_status = status_data.get("mostRecentTrainingStatus", {})
             if isinstance(most_recent_status, dict):
-                train_dict = most_recent_status.get(
-                    "latestTrainingStatusData", {}
-                )
+                train_dict = most_recent_status.get("latestTrainingStatusData", {})
                 if isinstance(train_dict, dict) and train_dict:
                     device_data = list(train_dict.values())[0]
 
@@ -133,10 +127,7 @@ def main():
             recovery_time_hours = round(raw_rec_time / 60)
 
     except Exception as e:
-        print(
-            "Warning: Could not fetch training readiness for"
-            f" {target_date_str}: {e}"
-        )
+        print(f"Warning: Could not fetch training readiness for {target_date_str}: {e}")
 
     # 6. Calculate total running distance (km) and total activity duration (hours) over last 7 days
     start_7d = (today - timedelta(days=6)).isoformat()
@@ -157,59 +148,26 @@ def main():
     running_km = round(running_meters / 1000.0, 1)
     weekly_activity_hours = round(total_duration_sec / 3600.0, 1)
 
-
-    # --- DEBUG INTENSITY MINUTES ---
-    print("--- DEBUG USER SUMMARY ---")
-    try:
-        summary = garmin.get_user_summary(today_str)
-        intensity_keys = {
-            k: v
-            for k, v in summary.items()
-            if "intensity" in k.lower() or "minute" in k.lower()
-        }
-        print(f"Relevant keys in get_user_summary: {json.dumps(intensity_keys, indent=2)}")
-    except Exception as e:
-        print(f"Error fetching user summary debug: {e}")
-    
-    # 7. Calculate Intensity Minutes for current week starting Monday
+    # 7. Calculate Intensity Minutes for current week starting Monday using get_user_summary
     monday_date = today - timedelta(days=today.weekday())
-    monday_str = monday_date.isoformat()
-
     moderate_mins = 0
     vigorous_mins = 0
 
-    try:
-        im_data = garmin.connectapi(
-            f"usersummary-service/stats/intensityMinutes/daily/{monday_str}/{today_str}"
-        )
-        if isinstance(im_data, list):
-            for day_entry in im_data:
-                moderate_mins += day_entry.get("moderateMinutes", 0) or 0
-                vigorous_mins += day_entry.get("vigorousMinutes", 0) or 0
-        elif isinstance(im_data, dict):
-            moderate_mins += im_data.get("moderateMinutes", 0) or 0
-            vigorous_mins += im_data.get("vigorousMinutes", 0) or 0
-    except Exception as e:
-        print(
-            f"Warning: Range fetch for intensity minutes failed ({e}), trying"
-            " daily fallback..."
-        )
-        curr = monday_date
-        while curr <= today:
-            try:
-                summary = garmin.get_user_summary(curr.isoformat())
-                if isinstance(summary, dict):
-                    moderate_mins += (
-                        summary.get("moderateIntensityMinutes", 0) or 0
-                    )
-                    vigorous_mins += (
-                        summary.get("vigorousIntensityMinutes", 0) or 0
-                    )
-            except Exception:
-                pass
-            curr += timedelta(days=1)
+    curr = monday_date
+    while curr <= today:
+        curr_str = curr.isoformat()
+        try:
+            summary = garmin.get_user_summary(curr_str)
+            if isinstance(summary, dict):
+                moderate_mins += summary.get("moderateIntensityMinutes", 0) or 0
+                vigorous_mins += summary.get("vigorousIntensityMinutes", 0) or 0
+        except Exception as e:
+            print(f"Warning: Could not fetch user summary for {curr_str}: {e}")
 
-    total_intensity_mins = moderate_mins + (2*vigorous_mins)
+        curr += timedelta(days=1)
+
+    # Garmin official goal weighting: Moderate + (2 * Vigorous)
+    weighted_intensity_mins = moderate_mins + (2 * vigorous_mins)
 
     # Build clean payload using resolved target_date_str
     payload = {
@@ -227,7 +185,7 @@ def main():
         "weeklyActivityHours": weekly_activity_hours,
         "weeklyModerateIntensityMins": moderate_mins,
         "weeklyVigorousIntensityMins": vigorous_mins,
-        "weeklyTotalIntensityMins": total_intensity_mins,
+        "weeklyTotalIntensityMins": weighted_intensity_mins,
         "lastUpdated": device_data.get("calendarDate", target_date_str),
     }
 
