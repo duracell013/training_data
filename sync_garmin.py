@@ -8,7 +8,6 @@ from garminconnect import Garmin
 
 def format_text(val):
     """Converts raw Garmin strings (e.g. 'RESTED_AND_READY' or 'PRODUCTIVE_3')
-
     into clean sentence case ('Rested and ready', 'Productive').
     """
     if not val or not isinstance(val, str):
@@ -130,20 +129,45 @@ def main():
     except Exception as e:
         print(f"Warning: Could not fetch training readiness for {target_date_str}: {e}")
 
-    # 6. Calculate total running distance (km) over the last 7 days
+    # 6. Calculate total running distance (km) and total activity duration (hours) over last 7 days
     start_7d = (today - timedelta(days=6)).isoformat()
     running_meters = 0.0
+    total_duration_sec = 0.0
 
     try:
         activities = garmin.get_activities_by_date(start_7d, today_str)
         for act in activities:
+            total_duration_sec += act.get("duration", 0.0) or 0.0
+
             type_key = act.get("activityType", {}).get("typeKey", "")
             if "running" in type_key:
-                running_meters += act.get("distance", 0.0)
+                running_meters += act.get("distance", 0.0) or 0.0
     except Exception as e:
         print(f"Warning: Could not fetch activities: {e}")
 
     running_km = round(running_meters / 1000.0, 1)
+    weekly_activity_hours = round(total_duration_sec / 3600.0, 1)
+
+    # 7. Calculate Intensity Minutes for current week starting Monday using get_user_summary
+    monday_date = today - timedelta(days=today.weekday())
+    moderate_mins = 0
+    vigorous_mins = 0
+
+    curr = monday_date
+    while curr <= today:
+        curr_str = curr.isoformat()
+        try:
+            summary = garmin.get_user_summary(curr_str)
+            if isinstance(summary, dict):
+                moderate_mins += summary.get("moderateIntensityMinutes", 0) or 0
+                vigorous_mins += summary.get("vigorousIntensityMinutes", 0) or 0
+        except Exception as e:
+            print(f"Warning: Could not fetch user summary for {curr_str}: {e}")
+
+        curr += timedelta(days=1)
+
+    # Garmin official goal weighting: Moderate + (2 * Vigorous)
+    weighted_intensity_mins = moderate_mins + (2 * vigorous_mins)
 
     # Build clean payload using resolved target_date_str
     payload = {
@@ -158,12 +182,16 @@ def main():
         "recoveryTimeFactorPercent": recovery_time_factor_percent,
         "vo2Max": vo2_max_precise,
         "weeklyRunningKm": running_km,
+        "weeklyActivityHours": weekly_activity_hours,
+        "weeklyModerateIntensityMins": moderate_mins,
+        "weeklyVigorousIntensityMins": vigorous_mins,
+        "weeklyTotalIntensityMins": weighted_intensity_mins,
         "lastUpdated": device_data.get("calendarDate", target_date_str),
     }
 
     print(f"Extracted payload for date {target_date_str}: {payload}")
 
-    # 7. Update the GitHub Gist
+    # 8. Update the GitHub Gist
     gist_id = os.environ["GIST_ID"]
     gh_pat = os.environ["GH_PAT"]
 
